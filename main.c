@@ -3,7 +3,7 @@
 #include <string.h>
 #include <ctype.h>
 
-// Token types
+// Token types that lexer will produce
 typedef enum {
     TOKEN_NUMBER,
     TOKEN_PLUS,
@@ -19,7 +19,7 @@ typedef enum {
 
 typedef struct {
     TokenType type;
-    char lexeme[64];
+    char data[64];
     double value; // For numbers
 } Token;
 
@@ -45,9 +45,9 @@ Token getNextToken() {
         Token token = {TOKEN_IDENTIFIER};
         int start = pos;
         while (isalnum(source[pos])) pos++;
-        strncpy(token.lexeme, &source[start], pos - start);
-        token.lexeme[pos - start] = '\0';
-        if (strcmp(token.lexeme, "print") == 0) {
+        strncpy(token.data, &source[start], pos - start);
+        token.data[pos - start] = '\0';
+        if (strcmp(token.data, "print") == 0) {
             token.type = TOKEN_PRINT;
         }
         return token;
@@ -74,7 +74,7 @@ void match(TokenType type) {
     if (currentToken.type == type) {
         currentToken = getNextToken();
     } else {
-        fprintf(stderr, "Unexpected token: %s\n", currentToken.lexeme);
+        fprintf(stderr, "Unexpected token: %s\n", currentToken.data);
         exit(1);
     }
 }
