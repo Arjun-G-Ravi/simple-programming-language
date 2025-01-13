@@ -19,12 +19,12 @@ typedef enum {
 
 typedef struct {
     TokenType type;
-    char data[64]; // Non numbers
+    char data[64]; // Non-numbers (like identifiers or keywords)
     double value; // For numbers
 } Token;
 
-char *source; // A pointer to the input source code as a string.
-int pos = 0; // Tracks the current position in the source code.
+char *source; // Pointer to the input source code as a string
+int pos = 0; // Tracks the current position in the source code
 
 // Function prototypes
 Token getNextToken();
@@ -33,13 +33,18 @@ double expression();
 void statement();
 
 // Lexer or Tokenizer
-// Converts the raw source code into tokens by scanning it character by character.
+// Converts the raw source code into tokens by scanning it character by character
 Token getNextToken() {
-    while (isspace(source[pos])) pos++; // skip spaces
+    while (isspace(source[pos])) pos++; // Skip spaces or newlines
 
     if (isdigit(source[pos])) {
         Token token = {TOKEN_NUMBER};
-        token.value = strtod(&source[pos], &source);
+        int start = pos;
+        while (isdigit(source[pos]) || source[pos] == '.') pos++; // Include decimals
+        char numberStr[64];
+        strncpy(numberStr, &source[start], pos - start);
+        numberStr[pos - start] = '\0';
+        token.value = atof(numberStr); // Convert the number string to a double
         return token;
     }
     if (isalpha(source[pos])) {
@@ -99,7 +104,7 @@ void statement() {
 }
 
 int main() {
-    source = """print 4;""";
+    source = "print 4;\nprint 10;\nprint 42;";
     currentToken = getNextToken();
     while (currentToken.type != TOKEN_EOF) {
         statement();
