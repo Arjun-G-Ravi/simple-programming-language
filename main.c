@@ -16,15 +16,15 @@ typedef enum {
     TOKEN_LPAREN,
     TOKEN_RPAREN,
     TOKEN_SEMICOLON,
-    TOKEN_STRING,    // New token type for string literals
+    TOKEN_STRING,
     TOKEN_EOF
 } TokenType;
 
 // Represents a token produced by the lexer
 typedef struct {
-    TokenType type;  // Type of the token
-    char data[64];   // For identifiers or keywords
-    double value;    // For numeric literals
+    TokenType type;
+    char data[64];
+    double value;
 } Token;
 
 // Represents a variable in the symbol table
@@ -34,7 +34,7 @@ typedef enum {
 } VariableType;
 
 typedef struct {
-    char name[64];   // Variable name
+    char name[64];
     VariableType type;
     union {
         double number;
@@ -42,9 +42,9 @@ typedef struct {
     } value;
 } Variable;
 
-#define MAX_VARIABLES 100   // Maximum number of variables
+#define MAX_VARIABLES 100 // Maximum number of variables
 Variable variables[MAX_VARIABLES]; // Symbol table for variables
-int variableCount = 0;             // Number of stored variables
+int variableCount = 0; // Number of stored variables
 
 char *source;    // Input source code
 int pos = 0;     // Current position in the source code
@@ -60,6 +60,7 @@ double getVariableValue(const char *name);
 void setVariableValue(const char *name, double value);
 const char* getStringValue(const char *name);
 void setStringValue(const char *name, const char *value);
+int getVariableIndex(const char *name);
 
 // Lexer: Converts raw source code into tokens
 Token getNextToken() {
@@ -141,7 +142,7 @@ void match(TokenType type) {
     if (currentToken.type == type) {
         currentToken = getNextToken();
     } else {
-        // The last empty token was causing issues. This fixes it
+        // The last empty token was causing issues. The following code fixes it
         if (currentToken.type != type) {
             if (currentToken.type != TOKEN_EOF) {
                 fprintf(stderr, "Unexpected token: %s\n", currentToken.data);
@@ -217,6 +218,15 @@ void statement() {
         if (currentToken.type == TOKEN_STRING) {
             printf("%s\n", currentToken.data);
             match(TOKEN_STRING);
+        } else if (currentToken.type == TOKEN_IDENTIFIER) {
+            char name[64];
+            strcpy(name, currentToken.data);
+            match(TOKEN_IDENTIFIER);
+            if (variables[getVariableIndex(name)].type == VAR_STRING) {
+                printf("%s\n", getStringValue(name));
+            } else {
+                printf("%lf\n", getVariableValue(name));
+            }
         } else {
             double value = expression();
             printf("%lf\n", value);
@@ -245,16 +255,25 @@ void statement() {
     }
 }
 
-// Retrieves the value of a variable from the symbol table
-double getVariableValue(const char *name) {
+// Helper function to get the index of a variable in the symbol table
+int getVariableIndex(const char *name) {
     for (int i = 0; i < variableCount; i++) {
         if (strcmp(variables[i].name, name) == 0) {
-            if (variables[i].type == VAR_NUMBER) {
-                return variables[i].value.number;
-            } else {
-                fprintf(stderr, "Expected number, got string\n");
-                exit(1);
-            }
+            return i;
+        }
+    }
+    return -1;
+}
+
+// Retrieves the value of a variable from the symbol table
+double getVariableValue(const char *name) {
+    int index = getVariableIndex(name);
+    if (index != -1) {
+        if (variables[index].type == VAR_NUMBER) {
+            return variables[index].value.number;
+        } else {
+            fprintf(stderr, "Expected number, got string\n");
+            exit(1);
         }
     }
     fprintf(stderr, "Undefined variable: %s\n", name);
@@ -263,14 +282,13 @@ double getVariableValue(const char *name) {
 
 // Retrieves the value of a string variable from the symbol table
 const char* getStringValue(const char *name) {
-    for (int i = 0; i < variableCount; i++) {
-        if (strcmp(variables[i].name, name) == 0) {
-            if (variables[i].type == VAR_STRING) {
-                return variables[i].value.string;
-            } else {
-                fprintf(stderr, "Expected string, got number\n");
-                exit(1);
-            }
+    int index = getVariableIndex(name);
+    if (index != -1) {
+        if (variables[index].type == VAR_STRING) {
+            return variables[index].value.string;
+        } else {
+            fprintf(stderr, "Expected string, got number\n");
+            exit(1);
         }
     }
     fprintf(stderr, "Undefined variable: %s\n", name);

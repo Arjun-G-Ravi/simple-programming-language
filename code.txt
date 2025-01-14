@@ -1,5 +1,7 @@
 x = 10;
 y = 100;
+k = x+y;
 z = "jeu";
 print("hello");
-print(x+y);
+print(z);
+print(k);
