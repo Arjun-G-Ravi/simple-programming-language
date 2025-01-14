@@ -17,7 +17,15 @@ typedef enum {
     TOKEN_RPAREN,
     TOKEN_SEMICOLON,
     TOKEN_STRING,
-    TOKEN_EOF
+    TOKEN_EOF,
+    TOKEN_WHILE,
+    TOKEN_LBRACE,
+    TOKEN_RBRACE,
+    TOKEN_EQUALS,    // ==
+    TOKEN_LT,       // <
+    TOKEN_GT,       // >
+    TOKEN_NOT,      // !
+    TOKEN_NOT_EQ    // !=
 } TokenType;
 
 // Represents a token produced by the lexer
@@ -61,6 +69,16 @@ void setVariableValue(const char *name, double value);
 const char* getStringValue(const char *name);
 void setStringValue(const char *name, const char *value);
 int getVariableIndex(const char *name);
+int condition();
+void while_statement();
+void block_statement();
+
+// Add this new struct to store while loop information
+typedef struct {
+    int condition_pos;
+    int block_pos;
+    int block_end;
+} WhileLoopInfo;
 
 // Lexer: Converts raw source code into tokens
 Token getNextToken() {
@@ -113,7 +131,36 @@ Token getNextToken() {
         token.data[pos - start] = '\0';
         if (strcmp(token.data, "print") == 0) {
             token.type = TOKEN_PRINT; // Recognize 'print' keyword
+        } else if (strcmp(token.data, "while") == 0) {
+            token.type = TOKEN_WHILE;
         }
+        return token;
+    }
+
+    // Handle multi-character tokens
+    if (source[pos] == '=') {
+        if (source[pos + 1] == '=') {
+            token.type = TOKEN_EQUALS;
+            strcpy(token.data, "==");
+            pos += 2;
+            return token;
+        }
+        token.type = TOKEN_ASSIGN;
+        strcpy(token.data, "=");
+        pos++;
+        return token;
+    }
+
+    if (source[pos] == '!') {
+        if (source[pos + 1] == '=') {
+            token.type = TOKEN_NOT_EQ;
+            strcpy(token.data, "!=");
+            pos += 2;
+            return token;
+        }
+        token.type = TOKEN_NOT;
+        strcpy(token.data, "!");
+        pos++;
         return token;
     }
 
@@ -127,6 +174,10 @@ Token getNextToken() {
         case ';': token = (Token){TOKEN_SEMICOLON, ";"}; break;
         case '(': token = (Token){TOKEN_LPAREN, "("}; break;
         case ')': token = (Token){TOKEN_RPAREN, ")"}; break;
+        case '{': token = (Token){TOKEN_LBRACE, "{"}; break;
+        case '}': token = (Token){TOKEN_RBRACE, "}"}; break;
+        case '<': token = (Token){TOKEN_LT, "<"}; break;
+        case '>': token = (Token){TOKEN_GT, ">"}; break;
         case '\0': token = (Token){TOKEN_EOF}; break;
         default:
             fprintf(stderr, "Unexpected character: %c\n", source[pos]);
@@ -209,9 +260,95 @@ double expression() {
     return result;
 }
 
-// Parses and executes statements (assignments or print statements)
+// Parses and evaluates conditions (handles '==', '!=', '<', '>' operators)
+int condition() {
+    double left = expression();
+    TokenType op = currentToken.type;
+    
+    if (op != TOKEN_EQUALS && op != TOKEN_NOT_EQ && 
+        op != TOKEN_LT && op != TOKEN_GT) {
+        fprintf(stderr, "Expected comparison operator, got %s\n", currentToken.data);
+        exit(1);
+    }
+    
+    match(op);
+    double right = expression();
+    
+    switch (op) {
+        case TOKEN_EQUALS: return left == right;
+        case TOKEN_NOT_EQ: return left != right;
+        case TOKEN_LT: return left < right;
+        case TOKEN_GT: return left > right;
+        default: return 0;
+    }
+}
+
+// Add these helper functions
+void saveState(int *saved_pos, Token *saved_token) {
+    *saved_pos = pos;
+    *saved_token = currentToken;
+}
+
+void restoreState(int saved_pos, Token saved_token) {
+    pos = saved_pos;
+    currentToken = saved_token;
+}
+
+// Updated while_statement implementation
+void while_statement() {
+    Token saved_token;
+    int saved_pos;
+    
+    match(TOKEN_WHILE);
+    match(TOKEN_LPAREN);
+    
+    // Save position before first condition check
+    saveState(&saved_pos, &saved_token);
+    
+    while (1) {
+        // Evaluate condition
+        int result = condition();
+        match(TOKEN_RPAREN);
+        
+        if (!result) {
+            // Skip block if condition is false
+            int brace_count = 1;
+            match(TOKEN_LBRACE);
+            
+            while (brace_count > 0) {
+                if (currentToken.type == TOKEN_LBRACE) brace_count++;
+                if (currentToken.type == TOKEN_RBRACE) brace_count--;
+                match(currentToken.type);
+            }
+            break;
+        }
+        
+        // Execute block
+        block_statement();
+        
+        // Go back to condition
+        restoreState(saved_pos, saved_token);
+    }
+}
+
+// Update block_statement to be simpler
+void block_statement() {
+    match(TOKEN_LBRACE);
+    while (currentToken.type != TOKEN_RBRACE) {
+        if (currentToken.type == TOKEN_EOF) {
+            fprintf(stderr, "Unexpected end of file inside block\n");
+            exit(1);
+        }
+        statement();
+    }
+    match(TOKEN_RBRACE);
+}
+
+// Parses and executes statements (assignments, print statements, or while loops)
 void statement() {
-    if (currentToken.type == TOKEN_PRINT) {
+    if (currentToken.type == TOKEN_WHILE) {
+        while_statement();
+    } else if (currentToken.type == TOKEN_PRINT) {
         // Handle 'print(expression);'
         match(TOKEN_PRINT);
         match(TOKEN_LPAREN);
