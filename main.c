@@ -137,7 +137,7 @@ Token getNextToken() {
         return token;
     }
 
-    // Handle multi-character tokens
+    // Next few blocks handle multi-character tokens 
     if (source[pos] == '=') {
         if (source[pos + 1] == '=') {
             token.type = TOKEN_EQUALS;
@@ -164,7 +164,6 @@ Token getNextToken() {
         return token;
     }
 
-    // Handle single-character tokens
     switch (source[pos]) {
         case '+': token = (Token){TOKEN_PLUS, "+"}; break;
         case '-': token = (Token){TOKEN_MINUS, "-"}; break;
@@ -186,6 +185,8 @@ Token getNextToken() {
     pos++;
     return token;
 }
+
+
 Token currentToken;
 
 // Ensures the current token matches the expected type and advances to the next token
@@ -208,7 +209,7 @@ void match(TokenType type) {
 
 // Parses and evaluates factors (numbers, variables, or strings)
 double factor() {
-    if (currentToken.type == TOKEN_NUMBER) {
+    if (currentToken.type == TOKEN_NUMBER) { 
         double value = currentToken.value;
         match(TOKEN_NUMBER);
         return value;
@@ -294,7 +295,7 @@ void restoreState(int saved_pos, Token saved_token) {
     currentToken = saved_token;
 }
 
-// Updated while_statement implementation
+// while loop implementation
 void while_statement() {
     Token saved_token;
     int saved_pos;
@@ -305,7 +306,7 @@ void while_statement() {
     // Save position before first condition check
     saveState(&saved_pos, &saved_token);
     
-    while (1) {
+    while (1) { // Using while loop to make while loop in new language
         // Evaluate condition
         int result = condition();
         match(TOKEN_RPAREN);
@@ -474,7 +475,7 @@ void setStringValue(const char *name, const char *value) {
     variableCount++;
 }
 
-// Reads the content of a file into a string
+// Reads the content of a file into a string; Used for reading code from external files
 char *readFile(const char *filePath) {
     FILE *file = fopen(filePath, "r");
     if (!file) {
