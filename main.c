@@ -16,6 +16,7 @@ typedef enum {
     TOKEN_LPAREN,
     TOKEN_RPAREN,
     TOKEN_SEMICOLON,
+    TOKEN_STRING,    // New token type for string literals
     TOKEN_EOF
 } TokenType;
 
@@ -27,9 +28,18 @@ typedef struct {
 } Token;
 
 // Represents a variable in the symbol table
+typedef enum {
+    VAR_NUMBER,
+    VAR_STRING
+} VariableType;
+
 typedef struct {
     char name[64];   // Variable name
-    double value;    // Variable value
+    VariableType type;
+    union {
+        double number;
+        char string[256];
+    } value;
 } Variable;
 
 #define MAX_VARIABLES 100   // Maximum number of variables
@@ -48,9 +58,18 @@ double factor();
 void statement();
 double getVariableValue(const char *name);
 void setVariableValue(const char *name, double value);
+const char* getStringValue(const char *name);
+void setStringValue(const char *name, const char *value);
 
 // Lexer: Converts raw source code into tokens
 Token getNextToken() {
+    // Initialize token with all fields set to 0
+    Token token = {
+        .type = TOKEN_EOF,
+        .data = {0},
+        .value = 0.0
+    };
+
     // Skip whitespace and line breaks
     while (isspace(source[pos]) || source[pos] == '\r' || source[pos] == '\n') {
         pos++;
@@ -58,7 +77,7 @@ Token getNextToken() {
 
     // Handle numeric literals
     if (isdigit(source[pos])) {
-        Token token = {TOKEN_NUMBER};
+        token.type = TOKEN_NUMBER;
         int start = pos;
         while (isdigit(source[pos]) || source[pos] == '.') pos++;
         char numberStr[64];
@@ -68,9 +87,25 @@ Token getNextToken() {
         return token;
     }
 
+    // Handle string literals
+    if (source[pos] == '"') {
+        token.type = TOKEN_STRING;
+        pos++;
+        int start = pos;
+        while (source[pos] != '"' && source[pos] != '\0') pos++;
+        if (source[pos] == '\0') {
+            fprintf(stderr, "Unterminated string literal\n");
+            exit(1);
+        }
+        strncpy(token.data, &source[start], pos - start);
+        token.data[pos - start] = '\0';
+        pos++;
+        return token;
+    }
+
     // Handle identifiers and keywords
     if (isalpha(source[pos])) {
-        Token token = {TOKEN_IDENTIFIER};
+        token.type = TOKEN_IDENTIFIER;
         int start = pos;
         while (isalnum(source[pos])) pos++;
         strncpy(token.data, &source[start], pos - start);
@@ -82,16 +117,15 @@ Token getNextToken() {
     }
 
     // Handle single-character tokens
-    Token token;
     switch (source[pos]) {
-        case '+': token = (Token){TOKEN_PLUS}; break;
-        case '-': token = (Token){TOKEN_MINUS}; break;
-        case '*': token = (Token){TOKEN_STAR}; break;
-        case '/': token = (Token){TOKEN_SLASH}; break;
-        case '=': token = (Token){TOKEN_ASSIGN}; break;
-        case ';': token = (Token){TOKEN_SEMICOLON}; break;
-        case '(': token = (Token){TOKEN_LPAREN}; break;
-        case ')': token = (Token){TOKEN_RPAREN}; break;
+        case '+': token = (Token){TOKEN_PLUS, "+"}; break;
+        case '-': token = (Token){TOKEN_MINUS, "-"}; break;
+        case '*': token = (Token){TOKEN_STAR, "*"}; break;
+        case '/': token = (Token){TOKEN_SLASH, "/"}; break;
+        case '=': token = (Token){TOKEN_ASSIGN, "="}; break;
+        case ';': token = (Token){TOKEN_SEMICOLON, ";"}; break;
+        case '(': token = (Token){TOKEN_LPAREN, "("}; break;
+        case ')': token = (Token){TOKEN_RPAREN, ")"}; break;
         case '\0': token = (Token){TOKEN_EOF}; break;
         default:
             fprintf(stderr, "Unexpected character: %c\n", source[pos]);
@@ -110,16 +144,17 @@ void match(TokenType type) {
         // The last empty token was causing issues. This fixes it
         if (currentToken.type != type) {
             if (currentToken.type != TOKEN_EOF) {
-            fprintf(stderr, "Unexpected token: %s\n", currentToken.data);
+                fprintf(stderr, "Unexpected token: %s\n", currentToken.data);
+            } else {
+                exit(1);
             }
-            else { exit(1); }
         }
         fprintf(stderr, "Unexpected token: %s\n", currentToken.data);
         exit(1);
     }
 }
 
-// Parses and evaluates factors (numbers or variables)
+// Parses and evaluates factors (numbers, variables, or strings)
 double factor() {
     if (currentToken.type == TOKEN_NUMBER) {
         double value = currentToken.value;
@@ -130,6 +165,13 @@ double factor() {
         strcpy(name, currentToken.data);
         match(TOKEN_IDENTIFIER);
         return getVariableValue(name);
+    } else if (currentToken.type == TOKEN_STRING) {
+        char value[256];
+        strcpy(value, currentToken.data);
+        match(TOKEN_STRING);
+        // Handle string literals in expressions if needed
+        // For now, just return 0.0 as a placeholder
+        return 0.0;
     } else {
         fprintf(stderr, "Invalid factor\n");
         exit(1);
@@ -172,9 +214,14 @@ void statement() {
         // Handle 'print(expression);'
         match(TOKEN_PRINT);
         match(TOKEN_LPAREN);
-        double value = expression();
+        if (currentToken.type == TOKEN_STRING) {
+            printf("%s\n", currentToken.data);
+            match(TOKEN_STRING);
+        } else {
+            double value = expression();
+            printf("%lf\n", value);
+        }
         match(TOKEN_RPAREN);
-        printf("%lf\n", value);
         match(TOKEN_SEMICOLON);
     } else if (currentToken.type == TOKEN_IDENTIFIER) {
         // Handle 'identifier = expression;'
@@ -182,8 +229,15 @@ void statement() {
         strcpy(name, currentToken.data);
         match(TOKEN_IDENTIFIER);
         match(TOKEN_ASSIGN);
-        double value = expression();
-        setVariableValue(name, value);
+        if (currentToken.type == TOKEN_STRING) {
+            char value[256];
+            strcpy(value, currentToken.data);
+            match(TOKEN_STRING);
+            setStringValue(name, value);
+        } else {
+            double value = expression();
+            setVariableValue(name, value);
+        }
         match(TOKEN_SEMICOLON);
     } else {
         fprintf(stderr, "Unknown statement\n");
@@ -195,29 +249,74 @@ void statement() {
 double getVariableValue(const char *name) {
     for (int i = 0; i < variableCount; i++) {
         if (strcmp(variables[i].name, name) == 0) {
-            return variables[i].value;
+            if (variables[i].type == VAR_NUMBER) {
+                return variables[i].value.number;
+            } else {
+                fprintf(stderr, "Expected number, got string\n");
+                exit(1);
+            }
         }
     }
     fprintf(stderr, "Undefined variable: %s\n", name);
     exit(1);
 }
 
-// Stores or updates a variable in the symbol table
+// Retrieves the value of a string variable from the symbol table
+const char* getStringValue(const char *name) {
+    for (int i = 0; i < variableCount; i++) {
+        if (strcmp(variables[i].name, name) == 0) {
+            if (variables[i].type == VAR_STRING) {
+                return variables[i].value.string;
+            } else {
+                fprintf(stderr, "Expected string, got number\n");
+                exit(1);
+            }
+        }
+    }
+    fprintf(stderr, "Undefined variable: %s\n", name);
+    exit(1);
+}
+
+// Stores or updates a numeric variable in the symbol table
 void setVariableValue(const char *name, double value) {
     for (int i = 0; i < variableCount; i++) {
         if (strcmp(variables[i].name, name) == 0) {
-            variables[i].value = value;
+            variables[i].type = VAR_NUMBER;
+            variables[i].value.number = value;
             return;
         }
     }
-    if (variableCount < MAX_VARIABLES) {
-        strcpy(variables[variableCount].name, name);
-        variables[variableCount].value = value;
-        variableCount++;
-    } else {
-        fprintf(stderr, "Variable limit exceeded\n");
+    
+    if (variableCount >= MAX_VARIABLES) {
+        fprintf(stderr, "Too many variables\n");
         exit(1);
     }
+    
+    strcpy(variables[variableCount].name, name);
+    variables[variableCount].type = VAR_NUMBER;
+    variables[variableCount].value.number = value;
+    variableCount++;
+}
+
+// Stores or updates a string variable in the symbol table
+void setStringValue(const char *name, const char *value) {
+    for (int i = 0; i < variableCount; i++) {
+        if (strcmp(variables[i].name, name) == 0) {
+            variables[i].type = VAR_STRING;
+            strcpy(variables[i].value.string, value);
+            return;
+        }
+    }
+    
+    if (variableCount >= MAX_VARIABLES) {
+        fprintf(stderr, "Too many variables\n");
+        exit(1);
+    }
+    
+    strcpy(variables[variableCount].name, name);
+    variables[variableCount].type = VAR_STRING;
+    strcpy(variables[variableCount].value.string, value);
+    variableCount++;
 }
 
 // Reads the content of a file into a string
@@ -243,7 +342,6 @@ char *readFile(const char *filePath) {
 
     return buffer;
 }
-
 
 int main() {
     const char *filePath = "/home/arjun/Desktop/GitHub/simple-programming-language/code.txt";
