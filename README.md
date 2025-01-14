@@ -7,11 +7,29 @@ A very simple, well-commented programming language made for the sake of learning
 3. Using gcc(or any other C compiler), compile the `main.c` file
 4. Run the compiled file
 
+# Current status
+The language is still in development and is not yet fully functional. The language is being developed in C.
 
-x = 10;
-y = 100;
-k = x+y;
-z = "jeu";
-print("hello");
-print(z);
-print(k);
+# Features
+- [x] Basic arithmetic operations
+- [ ] Basic data types
+  - [ ] Integers
+  - [ ] Floats
+  - [x] Strings
+  - [ ] Booleans
+- [ ] Basic data structures
+  - [ ] Arrays
+  - [ ] Dictionaries
+- [ ] Basic functions
+  - [x] Print
+  - [ ] Input
+- [x] Variables
+- [ ] Functions
+- [ ] if condition
+- [ ] Loops
+  - [x] While
+  - [ ] For
+- [ ] Comments
+- [ ] Error handling
+- [ ] Standard library
+- [ ] File I/O
